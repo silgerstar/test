@@ -1,0 +1,365 @@
+대형 언어 모델과 Model Context Protocol을 활용한 학습 도우미 시스템
+
+## 1. 프로젝트 개요
+
+### 1.1 목적
+기숙형 고등학교 재학생을 위한 AI 기반 개인 학습 관리 시스템으로, 사교육 공백을 보완하고 자기주도적 학습에 강제성과 체계성을 부여한다.
+
+### 1.2 핵심 가치
+- **접근성**: 24/7 이용 가능한 AI 튜터
+- **개인화**: 학생별 맞춤형 학습 계획 및 피드백
+- **책임감**: 벌금 시스템을 통한 학습 동기 부여
+- **효율성**: 즉각적인 채점과 상세한 해설 제공
+
+### 1.3 타겟 사용자
+- 주 사용자: 기숙형 고등학교 재학생 (1~3학년)
+- 부 사용자: 자기주도 학습을 원하는 일반 고등학생
+- 예상 사용자 규모: MVP 단계 100명, 1년 내 1,000명
+
+## 2. 핵심 기능 및 워크플로우
+
+### 2.1 채팅 기반 학습 세션 관리
+- **세션 생성**: 과목별/주제별 독립적인 채팅 세션
+- **학습 컨텍스트 유지**: 각 세션에서 업로드된 자료와 진행 상황 연속성 보장
+- **멀티태스킹**: 여러 과목의 과제를 동시 진행 가능
+- **폴더 구조**: 과목별 세션 정리 및 검색 기능
+
+### 2.2 학습 자료 및 과제 설정 워크플로우
+```
+1. 자료 업로드 → 2. AI 분석 → 3. 과제 계획 협의 → 4. 일정 확정 → 5. 과제 시작
+```
+
+### 2.3 과제 진행 및 평가 시스템
+- **실시간 진행률 추적**: 채팅 상단에 진행률 바 표시
+- **단계별 제출**: 문제별/페이지별 세분화된 제출 가능
+- **즉시 피드백**: 제출 즉시 채점 및 해설 제공
+- **재시도 관리**: 통과 기준 미달 시 재학습 유도
+
+### 2.4 동기부여 시스템
+- **벌금 제도**: 과제 미완료 시 자동 벌금 부과
+- **성취 배지**: 연속 완료, 고득점 등 성과 시각화
+- **학습 통계**: 주간/월간 학습 리포트 제공
+- **친구 비교**: 익명화된 또래 학습 현황 비교
+
+## 3. 기술 아키텍처
+
+### 3.1 시스템 아키텍처
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend      │───▶│   Backend API   │────▶│   MCP Server    │
+│  (Next.js 14)   │     │   (FastAPI)     │     │   (Python)      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │                        │
+         ▼                       ▼                        ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   CDN/Storage   │     │   PostgreSQL    │     │   Claude API    │
+│   (Cloudflare)  │     │   + Redis       │     │   (Anthropic)   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### 3.2 데이터 구조
+```typescript
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  school: string;
+  grade: number;
+  settings: UserSettings;
+  subscription: SubscriptionInfo;
+  createdAt: Date;
+}
+
+interface ChatSession {
+  id: string;
+  userId: string;
+  name: string;
+  subject: string;
+  folderId?: string;
+  materials: Material[];
+  assignments: Assignment[];
+  conversationHistory: Message[];
+  settings: SessionSettings;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface Assignment {
+  id: string;
+  sessionId: string;
+  title: string;
+  description: string;
+  materialPages: string[]; // 해당 자료의 페이지 범위
+  dueDate: Date;
+  reminderSettings: ReminderConfig;
+  status: 'pending' | 'in_progress' | 'submitted' | 'completed' | 'overdue';
+  submissions: Submission[];
+  completionCriteria: {
+    minScore: number;
+    maxAttempts: number;
+    penaltyAmount?: number;
+  };
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+interface Submission {
+  id: string;
+  assignmentId: string;
+  attemptNumber: number;
+  answers: Answer[];
+  score: number;
+  feedback: DetailedFeedback;
+  submittedAt: Date;
+  gradedAt: Date;
+}
+```
+
+### 3.3 MCP 서버 구조
+```python
+class StudyHelperMCPServer:
+    # Resources (읽기 전용)
+    resources = {
+        "session://materials/{session_id}": "업로드된 학습 자료",
+        "session://answers/{session_id}": "추출된 정답 데이터", 
+        "session://progress/{session_id}": "현재 진행 상황",
+        "session://history/{session_id}": "과제 제출 이력",
+        "session://analytics/{user_id}": "학습 분석 데이터"
+    }
+    
+    # Tools (실행 가능)
+    tools = {
+        "create_assignment_plan": "과제 계획 생성 및 저장",
+        "grade_submission": "제출물 채점",
+        "update_progress": "진행 상황 업데이트", 
+        "send_notification": "알림 발송",
+        "transfer_penalty": "벌금 송금",
+        "generate_report": "학습 리포트 생성",
+        "extract_content": "학습 자료 내용 추출"
+    }
+    
+    # Prompts (AI 지시사항)
+    prompts = {
+        "grading": "채점 및 피드백 생성 프롬프트",
+        "planning": "학습 계획 수립 프롬프트",
+        "tutoring": "개념 설명 및 힌트 제공 프롬프트"
+    }
+```
+
+## 4. 상세 구현 계획
+
+### 4.1 Phase 1 (MVP) - 4주 개발
+
+**Week 1-2: 기본 인프라**
+- React + TypeScript 기반 프론트엔드 구조
+- FastAPI 백엔드 + PostgreSQL 데이터베이스
+- 기본 채팅 UI 및 파일 업로드 기능
+- MCP 서버 기본 구조 구현
+- 사용자 인증 시스템 (JWT 기반)
+
+**Week 3-4: 핵심 기능**
+- PDF/이미지 텍스트 추출 파이프라인
+- Claude API 연동 및 MCP 통합
+- 과제 생성 및 채점 로직
+- 기본 알림 시스템
+- 진행률 추적 및 시각화
+
+### 4.2 Phase 2 (고도화) - 4주 개발
+- 유튜브 연동 및 영상 학습 지원
+- 테스트 모드 (시간 제한, 객관식 자동 채점)
+- 학습 분석 대시보드
+- 모바일 최적화
+- 벌금 시스템 통합 (토스페이먼츠 API)
+- 소셜 기능 (스터디 그룹, 랭킹)
+
+### 4.3 Phase 3 (확장) - 4주 개발
+- 음성 인터페이스 (STT/TTS)
+- AR 기반 문제 스캔 기능
+- 교사용 관리 대시보드
+- 학부모 알림 시스템
+- 외부 교육 플랫폼 연동
+
+## 5. 구체적 구현 예시
+
+### 5.1 과제 설정 대화 시나리오
+```
+사용자: [수학 문제집 PDF 업로드] 
+       이 문제집으로 매일 2페이지씩, 평일에만 공부하고 싶어
+
+AI: 업로드해주신 문제집을 분석했습니다. 총 120페이지, 예상 완주 기간은 12주입니다.
+    
+    📊 분석 결과:
+    - 단원: 6개 (함수, 미적분, 확률통계 등)
+    - 총 문제 수: 약 480문제
+    - 난이도: 중상 (수능 2~3등급 수준)
+    
+    📅 제안 일정:
+    - 월~금: 매일 2페이지 (약 8문제)
+    - 주말: 복습 및 오답 정리
+    - 평가 기준: 80점 이상 시 통과
+    - 벌금: 미완료 시 5,000원
+    
+    이 일정으로 진행하시겠습니까?
+
+사용자: 좋아, 그런데 80점은 너무 낮은 것 같아. 90점으로 해줘
+
+AI: 알겠습니다. 90점 이상으로 기준을 설정하고 첫 번째 과제를 생성하겠습니다.
+    [MCP Tool 호출: create_assignment_plan]
+    
+    📋 첫 번째 과제가 생성되었습니다!
+    - 범위: 1-2페이지 (함수의 극한)
+    - 마감: 내일 오후 10시
+    - 통과 기준: 90점 이상
+    - 알림: 오후 8시에 리마인더 발송
+    
+    지금 바로 시작하시겠습니까? 아니면 특정 시간에 시작하시겠습니까?
+```
+
+### 5.2 과제 제출 및 채점 프로세스
+```python
+async def process_submission(session_id: str, assignment_id: str, user_answers: list):
+    # 1. MCP Resource로 정답 및 문제 조회
+    answers = await mcp_client.read_resource(f"session://answers/{session_id}")
+    materials = await mcp_client.read_resource(f"session://materials/{session_id}")
+    
+    # 2. Claude API로 채점 요청
+    grading_prompt = f"""
+    다음 수학 문제들을 채점해주세요:
+    
+    문제 자료: {materials['current_pages']}
+    정답: {answers['current_assignment']}
+    학생 답안: {user_answers}
+    
+    각 문제별로:
+    1. 정답 여부 (O/X)
+    2. 풀이 과정 평가
+    3. 틀린 부분 지적
+    4. 개선 방향 제시
+    5. 유사 문제 추천
+    
+    최종 점수도 계산해주세요.
+    """
+    
+    result = await claude_client.chat(grading_prompt)
+    
+    # 3. MCP Tool로 결과 저장
+    await mcp_client.call_tool("grade_submission", {
+        "assignment_id": assignment_id,
+        "score": result['score'],
+        "feedback": result['feedback'],
+        "is_passed": result['score'] >= 90
+    })
+    
+    # 4. 통과 실패 시 추가 액션
+    if result['score'] < 90:
+        await mcp_client.call_tool("create_remedial_assignment", {
+            "original_assignment_id": assignment_id,
+            "weak_areas": result['weak_areas']
+        })
+    
+    return result
+```
+
+## 6. 기술 스택 상세
+
+### 6.1 백엔드
+- **FastAPI + SQLAlchemy**: 비동기 처리 및 ORM
+- **PostgreSQL + Redis**: 데이터 저장 및 캐싱
+- **Celery + RabbitMQ**: 백그라운드 작업 (마감 체크, 알림)
+- **Minio/S3**: 자체 호스팅 객체 스토리지
+- **Langchain**: LLM 오케스트레이션
+
+### 6.2 프론트엔드
+- **Next.js 14**: SSR 및 최적화
+- **Zustand**: 상태 관리
+- **React Query**: 서버 상태 동기화
+- **Framer Motion**: 애니메이션
+- **Tailwind CSS**: 스타일링
+- **Recharts**: 데이터 시각화
+
+### 6.3 AI/ML
+- **Claude 3.5 Sonnet**: 메인 LLM
+- **OpenAI Whisper**: 음성 인식
+- **Tesseract + EasyOCR**: 이미지 텍스트 추출
+- **LangSmith**: LLM 모니터링
+
+### 6.4 DevOps
+- **Docker Swarm/K8s**: 컨테이너 오케스트레이션
+- **Traefik**: 리버스 프록시 및 HTTPS
+- **Prometheus + Grafana**: 모니터링
+- **Sentry**: 에러 트래킹
+- **GitHub Actions**: CI/CD
+
+## 7. 보안 및 개인정보 보호
+
+### 7.1 데이터 보안
+- **암호화**: 모든 민감 데이터 AES-256 암호화
+- **전송 보안**: TLS 1.3 적용
+- **접근 제어**: RBAC 기반 권한 관리
+- **감사 로그**: 모든 데이터 접근 기록
+
+### 7.2 개인정보 보호
+- **최소 수집**: 필수 정보만 수집
+- **익명화**: 통계 데이터 익명 처리
+- **보관 기간**: 졸업 후 1년 자동 삭제
+- **동의 관리**: 명시적 동의 및 철회 기능
+
+## 8. 비즈니스 모델
+
+### 8.1 수익 모델
+- **기본 플랜**: 무료 (월 50개 과제)
+- **프리미엄**: 월 9,900원 (무제한 + 고급 기능)
+- **학교 라이선스**: 학생당 월 5,000원
+- **부가 서비스**: 1:1 튜터링, 모의고사 등
+
+### 8.2 성장 전략
+- **Phase 1**: 파일럿 학교 3곳 무료 제공
+- **Phase 2**: 입소문 마케팅 + 학생 추천 보상
+- **Phase 3**: 교육청 협력 및 B2B 확대
+
+## 9. 성공 지표 (KPI)
+
+### 9.1 사용자 지표
+- **MAU**: 월간 활성 사용자 수
+- **Retention**: 30일 리텐션 율
+- **과제 완료율**: 생성 대비 완료 비율
+- **NPS**: 순추천지수
+
+### 9.2 학습 효과 지표
+- **성적 향상도**: 사용 전후 비교
+- **학습 시간**: 일일 평균 학습 시간
+- **재시도율**: 통과 실패 후 재도전 비율
+
+## 10. 리스크 관리
+
+### 10.1 기술적 리스크
+- **API 비용**: Claude API 사용량 최적화
+- **확장성**: 사용자 증가 대비 인프라 준비
+- **다운타임**: 99.9% 가용성 목표
+
+### 10.2 사업적 리스크
+- **경쟁사**: 차별화 포인트 강화
+- **규제**: 교육 관련 법규 준수
+- **시장 변화**: 유연한 피벗 전략
+
+## 11. 로드맵
+
+### 2024년 1분기
+- MVP 개발 완료
+- 파일럿 테스트 (3개교 100명)
+- 피드백 반영 및 개선
+
+### 2024년 2분기
+- 정식 출시
+- 마케팅 캠페인 시작
+- 프리미엄 기능 추가
+
+### 2024년 3분기
+- 모바일 앱 출시
+- B2B 영업 시작
+- AI 튜터 고도화
+
+### 2024년 4분기
+- 1만 사용자 달성
+- 시리즈 A 투자 유치
+- 해외 진출 준비
