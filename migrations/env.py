@@ -12,7 +12,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Import your models here
-from app import Base, DATABASE_URL
+from main import Base, DATABASE_URL
 
 # Override sqlalchemy.url with DATABASE_URL from environment
 if DATABASE_URL:

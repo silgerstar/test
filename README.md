@@ -15,7 +15,7 @@ GPTs Actions와 연동되는 할 일 관리 API 서버입니다. 사용자가 �
 
 ```
 .
-├── app.py                    # 메인 Flask 앱
+├── main.py                   # 메인 Flask 앱
 ├── requirements.txt          # Python 의존성
 ├── alembic.ini              # Alembic 설정
 ├── migrations/              # 데이터베이스 마이그레이션
@@ -232,14 +232,14 @@ alembic upgrade head
 
 ```bash
 # 개발 모드
-python app.py
+python main.py
 
 # 또는 Flask CLI 사용
-export FLASK_APP=app.py
+export FLASK_APP=main.py
 flask run
 
 # 프로덕션 모드 (Gunicorn)
-gunicorn --bind 0.0.0.0:5000 "app:create_app()"
+gunicorn --bind 0.0.0.0:5000 "main:app"
 ```
 
 서버는 `http://localhost:5000`에서 실행됩니다.
@@ -397,7 +397,7 @@ Render 대시보드에서 다음 환경변수를 설정:
 
 **Web Service 설정:**
 - Build Command: `pip install -r requirements.txt && alembic upgrade head`
-- Start Command: `gunicorn --bind 0.0.0.0:10000 --workers 2 --timeout 120 "app:create_app()"`
+- Start Command: `gunicorn --bind 0.0.0.0:10000 --workers 2 --timeout 120 "main:app"`
 - Environment: `Python 3`
 - Health Check Path: `/`
 

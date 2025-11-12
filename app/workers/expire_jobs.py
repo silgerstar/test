@@ -20,7 +20,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# Task 모델 정의 (app.py와 동일)
+# Task 모델 정의 (main.py와 동일)
 class Task(Base):
     __tablename__ = 'tasks'
     

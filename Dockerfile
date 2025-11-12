@@ -15,11 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 환경변수 설정
-ENV FLASK_APP=app.py
+ENV FLASK_APP=main.py
 ENV PYTHONUNBUFFERED=1
 
 # 포트 노출
 EXPOSE 5000
 
 # gunicorn으로 실행
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:create_app()"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "main:app"]

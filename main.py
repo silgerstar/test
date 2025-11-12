@@ -424,3 +424,4 @@ if __name__ == '__main__':
     # 개발 환경에서만 실행
     Base.metadata.create_all(engine)
     app.run(host='0.0.0.0', port=5000, debug=(FLASK_ENV == 'development'))
+
