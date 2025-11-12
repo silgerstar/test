@@ -28,6 +28,18 @@ GPTs Actions와 연동되는 할 일 관리 API 서버입니다. 사용자가 �
 └── README.md
 ```
 
+## 환경변수 빠른 참조
+
+| 환경변수 | 필수 여부 | 기본값 | 설명 |
+|---------|---------|--------|------|
+| `DATABASE_URL` | ✅ 필수 | 없음 | PostgreSQL 연결 문자열 |
+| `API_KEY` | ✅ 필수 | 없음 | GPTs Actions 인증 키 (32자 이상 권장) |
+| `CRON_TOKEN` | ✅ 필수 | 없음 | 내부 크론 토큰 (32자 이상 권장) |
+| `FLASK_ENV` | 선택 | `development` | `development` 또는 `production` |
+| `EXPIRE_INTERVAL_SECONDS` | 선택 | `300` | 만료 작업 체크 주기 (초) |
+
+> 💡 **상세 설명은 아래 "환경변수 설정" 섹션을 참조하세요.**
+
 ## 로컬 개발 환경 설정
 
 ### 1. 필요한 소프트웨어 설치
@@ -75,6 +87,133 @@ API_KEY=your-secret-api-key
 CRON_TOKEN=your-secret-cron-token
 FLASK_ENV=development
 ```
+
+#### 환경변수 상세 설명
+
+##### 필수 환경변수
+
+**`DATABASE_URL`** (필수)
+- **설명**: PostgreSQL 데이터베이스 연결 문자열
+- **형식**: `postgresql+psycopg://[사용자명]:[비밀번호]@[호스트]:[포트]/[데이터베이스명]`
+- **예시**:
+  - 로컬 개발: `postgresql+psycopg://postgres:mypassword@localhost:5432/study_assistant`
+  - Render: Render PostgreSQL Add-on에서 자동 생성 (대시보드에서 확인 가능)
+- **설정 방법**:
+  - 로컬: PostgreSQL 설치 후 직접 작성
+  - Render: PostgreSQL Add-on 생성 시 자동으로 환경변수에 추가됨
+- **주의사항**: 
+  - 비밀번호에 특수문자가 포함된 경우 URL 인코딩 필요
+  - 프로덕션 환경에서는 반드시 강력한 비밀번호 사용
+
+**`API_KEY`** (필수)
+- **설명**: GPTs Actions에서 API를 호출할 때 사용하는 인증 키
+- **형식**: 임의의 긴 문자열 (최소 32자 권장)
+- **예시**: 
+  - `sk-1234567890abcdefghijklmnopqrstuvwxyz`
+  - `my-super-secret-api-key-for-gpts-actions-2024`
+- **생성 방법**:
+  ```bash
+  # Python으로 랜덤 키 생성
+  python -c "import secrets; print(secrets.token_urlsafe(32))"
+  
+  # 또는 OpenSSL 사용
+  openssl rand -hex 32
+  ```
+- **사용처**: 
+  - 모든 공용 API 엔드포인트 (`/v1/users`, `/v1/tasks` 등)의 `X-API-Key` 헤더
+  - GPTs Actions 설정에서 이 키를 입력하여 API 인증
+- **보안**: 
+  - 절대 코드에 하드코딩하지 않기
+  - Git에 커밋하지 않기 (`.env`는 `.gitignore`에 포함됨)
+  - 각 환경별로 다른 키 사용 권장
+
+**`CRON_TOKEN`** (필수)
+- **설명**: 내부 크론 엔드포인트(`/v1/internal/cron/expire`) 보호용 Bearer 토큰
+- **형식**: 임의의 긴 문자열 (최소 32자 권장)
+- **예시**:
+  - `cron-secret-token-2024-abcdef123456`
+  - `internal-expire-worker-token-xyz789`
+- **생성 방법**: `API_KEY`와 동일하게 랜덤 문자열 생성
+- **사용처**: 
+  - Background Worker가 만료 작업을 처리할 때 사용 (현재는 HTTP 호출 대신 직접 DB 접근)
+  - 향후 외부 크론 서비스(예: cron-job.org)에서 호출 시 사용
+- **보안**: 
+  - `API_KEY`와 별도로 다른 값 사용
+  - 외부에 노출되지 않도록 주의
+
+##### 선택적 환경변수
+
+**`FLASK_ENV`** (선택, 기본값: `development`)
+- **설명**: Flask 애플리케이션 실행 환경
+- **가능한 값**:
+  - `development`: 개발 모드 (디버그 모드, 상세한 로그 출력)
+  - `production`: 프로덕션 모드 (최적화된 설정)
+- **예시**: `FLASK_ENV=production`
+- **설정 권장**:
+  - 로컬 개발: `development`
+  - Render 배포: `production`
+- **영향**:
+  - 개발 모드: SQLAlchemy 쿼리 로그 출력, 자동 리로드
+  - 프로덕션 모드: 성능 최적화, 에러 페이지 단순화
+
+**`EXPIRE_INTERVAL_SECONDS`** (선택, 기본값: `300`)
+- **설명**: Background Worker가 만료 작업을 처리하는 주기 (초 단위)
+- **형식**: 정수 (초 단위)
+- **예시**: 
+  - `300` (5분마다 실행)
+  - `600` (10분마다 실행)
+  - `60` (1분마다 실행 - 빈번한 체크 필요 시)
+- **권장값**: 
+  - 일반적인 용도: `300` (5분)
+  - 실시간성이 중요한 경우: `60` (1분)
+  - 리소스 절약이 필요한 경우: `600` (10분)
+- **사용처**: `app/workers/expire_jobs.py`에서 사용
+- **주의사항**: 너무 짧은 간격(예: 10초 이하)은 데이터베이스 부하를 증가시킬 수 있음
+
+#### 환경변수 설정 예시
+
+**로컬 개발 환경 (.env 파일)**
+```bash
+# 데이터베이스 (로컬 PostgreSQL)
+DATABASE_URL=postgresql+psycopg://postgres:postgres123@localhost:5432/study_assistant
+
+# API 인증 (GPTs Actions에서 사용)
+API_KEY=dev-api-key-1234567890abcdefghijklmnopqrstuvwxyz
+
+# 내부 크론 토큰
+CRON_TOKEN=dev-cron-token-abcdef1234567890ghijklmnopqrstuv
+
+# 개발 모드
+FLASK_ENV=development
+
+# 만료 체크 주기 (선택사항)
+EXPIRE_INTERVAL_SECONDS=300
+```
+
+**Render 프로덕션 환경 (대시보드에서 설정)**
+```
+DATABASE_URL=<Render PostgreSQL Add-on에서 자동 생성>
+API_KEY=<강력한 랜덤 문자열 생성>
+CRON_TOKEN=<강력한 랜덤 문자열 생성 (API_KEY와 다른 값)>
+FLASK_ENV=production
+EXPIRE_INTERVAL_SECONDS=300
+```
+
+#### 환경변수 확인 방법
+
+**로컬 환경에서 확인:**
+```bash
+# Python으로 확인
+python -c "import os; print(os.getenv('DATABASE_URL'))"
+
+# 또는 .env 파일 직접 확인
+cat .env
+```
+
+**Render 환경에서 확인:**
+1. Render 대시보드 → 해당 서비스 선택
+2. "Environment" 탭 클릭
+3. 환경변수 목록 확인 및 수정 가능
 
 ### 5. 데이터베이스 마이그레이션 실행
 
@@ -189,10 +328,55 @@ Authorization: Bearer your-cron-token
 
 Render 대시보드에서 다음 환경변수를 설정:
 
-- `DATABASE_URL`: Render PostgreSQL Add-on의 연결 문자열 (자동 생성됨)
-- `API_KEY`: GPTs Actions에서 사용할 API 키
-- `CRON_TOKEN`: 내부 크론 엔드포인트 보호용 토큰
-- `FLASK_ENV`: `production`
+#### 자동 설정되는 환경변수
+
+- **`DATABASE_URL`**: Render PostgreSQL Add-on 생성 시 자동으로 설정됩니다. `render.yaml`에서 `fromDatabase`로 연결됩니다.
+
+#### 수동 설정이 필요한 환경변수
+
+1. **`API_KEY`** (필수)
+   - Render 대시보드 → "Environment" 탭 → "Add Environment Variable" 클릭
+   - Key: `API_KEY`
+   - Value: 안전한 랜덤 문자열 (최소 32자)
+   - 생성 방법:
+     ```bash
+     # 로컬에서 생성 후 복사
+     python -c "import secrets; print(secrets.token_urlsafe(32))"
+     ```
+   - 예시: `sk_live_abc123xyz789...` (32자 이상)
+
+2. **`CRON_TOKEN`** (필수)
+   - Key: `CRON_TOKEN`
+   - Value: `API_KEY`와 다른 안전한 랜덤 문자열
+   - 생성 방법: `API_KEY`와 동일
+   - 예시: `cron_internal_token_xyz789...` (32자 이상)
+
+3. **`FLASK_ENV`** (권장)
+   - Key: `FLASK_ENV`
+   - Value: `production`
+   - 프로덕션 환경에서는 반드시 `production`으로 설정
+
+4. **`EXPIRE_INTERVAL_SECONDS`** (선택)
+   - Key: `EXPIRE_INTERVAL_SECONDS`
+   - Value: `300` (기본값, 5분)
+   - 만료 작업 체크 주기를 변경하려면 설정
+
+#### 환경변수 설정 순서
+
+1. Render 대시보드 접속
+2. Web Service 선택 (또는 새로 생성)
+3. 좌측 메뉴에서 "Environment" 클릭
+4. "Add Environment Variable" 버튼 클릭
+5. 각 환경변수 입력 후 "Save Changes" 클릭
+6. 서비스 재배포 (자동 재배포되거나 수동으로 재배포 필요)
+
+#### 보안 권장사항
+
+- ✅ 각 환경변수는 서로 다른 랜덤 값 사용
+- ✅ 최소 32자 이상의 긴 문자열 사용
+- ✅ 정기적으로 키 로테이션 (특히 프로덕션 환경)
+- ❌ 예측 가능한 값 사용 금지 (예: `password123`, `test`)
+- ❌ Git 저장소에 커밋하지 않기
 
 ### 3. PostgreSQL 데이터베이스 생성
 
