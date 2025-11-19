@@ -89,6 +89,15 @@ class VerificationAttempt(Base):
     
     task = relationship('Task', back_populates='verification_attempts')
 
+# ============================================================================
+# DB 테이블 생성 (없으면 자동 생성)
+#  - 이 줄은 모듈이 import 될 때 딱 한 번 실행된다.
+#  - 이미 테이블이 있으면 아무것도 안 하고, 없으면 users/tasks/verification_attempts를 만든다.
+# ============================================================================
+Base.metadata.create_all(bind=engine)
+
+
+
 
 # ============================================================================
 # 인증 미들웨어
@@ -117,6 +126,8 @@ def require_bearer_token(f):
             return jsonify({'error': 'Invalid token'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+
 
 
 # ============================================================================
