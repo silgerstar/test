@@ -119,6 +119,25 @@ def require_bearer_token(f):
     return decorated_function
 
 
+
+# ============================================================================
+# DB 초기화용 엔드포인트 (임시)
+# ============================================================================
+
+@app.route('/internal/init-db', methods=['POST'])
+@require_api_key
+def init_db():
+    """
+    DB에 필요한 테이블(users, tasks, verification_attempts)을 생성한다.
+    이미 있으면 건너뛰고, 없으면 새로 만든다.
+    """
+    try:
+        Base.metadata.create_all(engine)
+        return jsonify({'ok': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ============================================================================
 # 유틸리티 함수
 # ============================================================================
