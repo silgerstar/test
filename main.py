@@ -191,6 +191,11 @@ def health():
 @require_api_key
 def create_user():
     """사용자 생성"""
+        try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        return jsonify({'error': f'Failed to init DB: {e}'}), 500
+
     data = request.get_json() or {}
     external_user_id = data.get('external_user_id')
     tz = data.get('tz', 'Asia/Seoul')
